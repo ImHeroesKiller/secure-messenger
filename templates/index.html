@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Secure Messenger</title>
+</head>
+<body>
+    <h1>Send a Secure Message</h1>
+    <form action="/send_message" method="post">
+        <textarea name="message"></textarea><br>
+        <input type="submit" value="Send">
+    </form>
+    <h2>Messages:</h2>
+    <ul>
+        {% for id, message in messages %}
+            <li>{{ message }}</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
