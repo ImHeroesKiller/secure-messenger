@@ -19,4 +19,12 @@ function sendMessage() {
         messageInput.value = '';
         chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to bottom
     }
+    
+    // Tampilkan halaman sukses
+    document.getElementById('success-page').style.display = 'block';
+
+    // Sembunyikan halaman sukses setelah beberapa detik (misalnya, 3 detik)
+    setTimeout(() => {
+        document.getElementById('success-page').style.display = 'none';
+    }, 3000);
 }
