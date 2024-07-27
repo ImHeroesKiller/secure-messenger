@@ -1,19 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Secure Messenger</title>
+    <title>Aplikasi Chat</title>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <h1>Send a Secure Message</h1>
-    <form action="/send_message" method="post">
-        <textarea name="message"></textarea><br>
-        <input type="submit" value="Send">
-    </form>
-    <h2>Messages:</h2>
-    <ul>
-        {% for id, message in messages %}
-            <li>{{ message }}</li>
-        {% endfor %}
-    </ul>
+    <div id="chat-container">
+        <div id="chat-header">
+            <h2>Aplikasi Chat</h2>
+        </div>
+        <div id="chat-messages">
+            </div>
+        <div id="chat-input">
+            <input type="text" id="message-input" placeholder="Ketik pesan...">
+            <button id="send-button">Kirim</button>
+        </div>
+    </div>
+    <script src="js/script.js"></script>
 </body>
 </html>
