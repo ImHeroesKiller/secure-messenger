@@ -1,25 +1,218 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-    <title>Aplikasi Chat</title>
-    <link rel="stylesheet" href="css/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Messenger • Rooms</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body { font-family: 'Inter', system_ui, sans-serif; }
+        .chat-bubble { max-width: 75%; padding: 12px 16px; border-radius: 16px; }
+        .sent { background: #166534; color: #dcfce7; border-bottom-right-radius: 4px; }
+        .received { background: #27251f; color: #e5e5e5; border-bottom-left-radius: 4px; }
+        .room-tab { transition: all 0.2s; }
+        .room-tab.active { background-color: #166534; color: white; }
+    </style>
 </head>
-<body>
-    <div id="chat-container">
-        <div id="chat-header">
-            <h2>Aplikasi Chat</h2>
-        </div>
-        <div id="chat-messages">
+<body class="bg-zinc-950 text-zinc-200">
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-sm p-8">
+            <div class="text-center mb-6">
+                <div class="text-3xl mb-2">◉</div>
+                <div class="font-semibold text-xl">Secure Messenger</div>
+                <div class="text-emerald-400 text-sm">Multiple Rooms • Encrypted</div>
             </div>
-        <div id="chat-input">
-            <input type="text" id="message-input" placeholder="Ketik pesan...">
-            <button id="send-button">Kirim</button>
-        </div>
-        <div id="success-page" style="display: none;">
-            <h3>Pesan Terkirim!</h3>
-            <p>Pesan Anda telah berhasil terkirim.</p>
+
+            <!-- Login Form -->
+            <div id="login-form">
+                <input id="login-username" type="text" placeholder="Username" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 mb-3 text-sm">
+                <input id="login-password" type="password" placeholder="Password" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 mb-4 text-sm">
+                <button onclick="login()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-3 rounded-2xl font-medium mb-3">Login</button>
+                <div class="text-center text-xs">Belum punya akun? <span onclick="showRegister()" class="text-emerald-400 cursor-pointer underline">Daftar</span></div>
+            </div>
+
+            <!-- Register Form -->
+            <div id="register-form" class="hidden">
+                <input id="reg-username" type="text" placeholder="Username" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 mb-3 text-sm">
+                <input id="reg-password" type="password" placeholder="Password" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-3 mb-4 text-sm">
+                <button onclick="register()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-3 rounded-2xl font-medium mb-3">Daftar</button>
+                <div class="text-center text-xs">Sudah punya akun? <span onclick="showLogin()" class="text-emerald-400 cursor-pointer underline">Login</span></div>
+            </div>
         </div>
     </div>
-    <script src="js/script.js"></script>
+
+    <!-- Main App -->
+    <div id="main-app" class="max-w-2xl mx-auto h-screen flex flex-col hidden">
+        <!-- Header -->
+        <div class="px-6 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900">
+            <div class="flex items-center gap-x-3">
+                <div class="w-9 h-9 bg-emerald-950 border border-emerald-800 rounded-2xl flex items-center justify-center">
+                    <span class="text-emerald-400 text-xl">◉</span>
+                </div>
+                <div>
+                    <div class="font-semibold">Secure Messenger</div>
+                    <div class="text-xs text-emerald-500" id="user-info">Multiple Rooms</div>
+                </div>
+            </div>
+            <button onclick="logout()" class="text-xs px-4 py-1.5 border border-zinc-700 rounded-full hover:bg-zinc-800">Logout</button>
+        </div>
+
+        <!-- Room Tabs -->
+        <div class="flex border-b border-zinc-800 bg-zinc-900 px-2">
+            <div onclick="switchRoom('general')" id="tab-general" class="room-tab flex-1 text-center py-3 text-sm font-medium cursor-pointer active">General</div>
+            <div onclick="switchRoom('random')" id="tab-random" class="room-tab flex-1 text-center py-3 text-sm font-medium cursor-pointer text-zinc-400">Random</div>
+            <div onclick="switchRoom('project')" id="tab-project" class="room-tab flex-1 text-center py-3 text-sm font-medium cursor-pointer text-zinc-400">Project</div>
+        </div>
+
+        <!-- Messages -->
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-6 space-y-4 bg-zinc-950"></div>
+
+        <!-- Input -->
+        <div class="p-4 border-t border-zinc-800 bg-zinc-900">
+            <div class="flex items-center gap-x-3 bg-zinc-800 rounded-3xl px-2 py-1.5">
+                <input id="message-input" type="text" placeholder="Ketik pesan..." class="flex-1 bg-transparent px-5 py-2 text-sm focus:outline-none" onkeypress="if (event.key === 'Enter') sendMessage()">
+                <button onclick="sendMessage()" class="bg-emerald-600 hover:bg-emerald-500 px-6 py-2 rounded-2xl text-sm font-medium">Kirim</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentRoom = 'general';
+
+        const authModal = document.getElementById('auth-modal');
+        const mainApp = document.getElementById('main-app');
+        const chatMessages = document.getElementById('chat-messages');
+
+        function appendMessage(text, username, isMine = true, time = null) {
+            const div = document.createElement('div');
+            div.className = `flex ${isMine ? 'justify-end' : 'justify-start'}`;
+            const bubble = document.createElement('div');
+            bubble.className = `chat-bubble px-4 py-3 text-sm ${isMine ? 'sent' : 'received'}`;
+            bubble.innerHTML = `
+                \( {!isMine ? `<div class="text-xs text-emerald-400 mb-0.5"> \){username}</div>` : ''}
+                <div>${text}</div>
+                <div class="message-time text-right mt-1">${time || new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+            `;
+            div.appendChild(bubble);
+            chatMessages.appendChild(div);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        socket.on('new_message', (data) => {
+            if (data.room === currentRoom) {
+                const currentUser = document.getElementById('user-info').innerText.split(' •')[0];
+                appendMessage(data.content, data.username, data.username === currentUser, data.time);
+            }
+        });
+
+        async function switchRoom(room) {
+            socket.emit('leave_room', { room: currentRoom });
+            currentRoom = room;
+            socket.emit('join_room', { room: currentRoom });
+
+            document.querySelectorAll('.room-tab').forEach(tab => tab.classList.remove('active', 'text-white'));
+            document.getElementById('tab-' + room).classList.add('active', 'text-white');
+
+            chatMessages.innerHTML = '';
+            await loadMessages(room);
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            appendMessage(text, 'You', true);
+            input.value = '';
+
+            socket.emit('send_message', { message: text, room: currentRoom });
+        }
+
+        async function loadMessages(room = 'general') {
+            try {
+                const res = await fetch('/messages?room=' + room);
+                const messages = await res.json();
+                chatMessages.innerHTML = '';
+                messages.reverse().forEach(msg => {
+                    appendMessage(msg.content, msg.username, msg.is_mine, msg.time);
+                });
+            } catch(e) {}
+        }
+
+        // ==================== AUTH ====================
+        async function register() {
+            const username = document.getElementById('reg-username').value.trim();
+            const password = document.getElementById('reg-password').value.trim();
+
+            if (!username || !password) {
+                alert("Username dan password tidak boleh kosong");
+                return;
+            }
+
+            const res = await fetch('/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, password})
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                alert('Registrasi berhasil! Silakan login.');
+                showLogin();
+            } else {
+                alert(data.error || 'Gagal daftar');
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value.trim();
+
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, password})
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                authModal.style.display = 'none';
+                mainApp.classList.remove('hidden');
+                document.getElementById('user-info').innerText = data.username + ' • Multiple Rooms';
+                socket.emit('join_room', { room: currentRoom });
+                loadMessages(currentRoom);
+            } else {
+                alert(data.error || 'Login gagal');
+            }
+        }
+
+        async function logout() {
+            await fetch('/logout');
+            location.reload();
+        }
+
+        function showRegister() {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('register-form').classList.remove('hidden');
+        }
+
+        function showLogin() {
+            document.getElementById('register-form').classList.add('hidden');
+            document.getElementById('login-form').classList.remove('hidden');
+        }
+
+        window.onload = () => {
+            {% if logged_in %}
+                authModal.style.display = 'none';
+                mainApp.classList.remove('hidden');
+                document.getElementById('user-info').innerText = '{{ username }} • Multiple Rooms';
+                socket.emit('join_room', { room: currentRoom });
+                loadMessages(currentRoom);
+            {% endif %}
+        }
+    </script>
 </body>
 </html>
